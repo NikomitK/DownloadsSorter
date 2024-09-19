@@ -6,7 +6,7 @@
 
     <groupId>nikomitk</groupId>
     <artifactId>downloads-sorter</artifactId>
-    <version>0.1.0-alpha</version>
+    <version>0.2.0-beta</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
