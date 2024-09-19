@@ -13,7 +13,7 @@
 
     <Loggers>
         <Logger name="com.mycompany" level="INFO"/>
-        <Root level="ALL">
+        <Root level="INFO">
             <AppenderRef ref="CONSOLE"/>
         </Root>
     </Loggers>
