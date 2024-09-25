@@ -179,6 +179,14 @@ public class Main {
     private static void moveFile(String fileName) {
         File file = new File(completeSortDir + File.separator + fileName);
         String newDir = fileTypeMap.get(fileName.substring(fileName.lastIndexOf('.') + 1));
+        File dir = new File(newDir);
+        if(!dir.exists()) {
+            try {
+                dir.mkdirs();
+            } catch (SecurityException e) {
+                LOG.error(e);
+            }
+        }
         String newFileName = newDir + File.separator + fileName;
         boolean move = file.renameTo(new File(newFileName));
         if(move) movedFiles++;
