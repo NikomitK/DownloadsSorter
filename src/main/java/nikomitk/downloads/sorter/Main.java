@@ -24,7 +24,9 @@ public class Main {
     private static final Gson GSON = new Gson();
     private static final String HOME_DIR = System.getProperty("user.home");
     private static final Map<String, String> fileTypeMap = new HashMap<>();
+    private static final String DEFAULT_CONFIG_FILE = "/.config/downloads-sorter/sort-config.json";
 
+    private static String configFile = HOME_DIR + DEFAULT_CONFIG_FILE;
     private static String sortDir = "/Downloads";
     private static String completeSortDir;
 
@@ -33,11 +35,12 @@ public class Main {
     private static int movedFiles;
 
     public static void main(String[] args) {
+
         LOG.info("Sorting files!");
 
-        createMapFromConfigFile();
-
         handleArgs(args);
+
+        createMapFromConfigFile();
 
         completeSortDir = HOME_DIR + sortDir;
 
@@ -61,9 +64,10 @@ public class Main {
      * Handles CLI Arguments.
      */
     private static void handleArgs(String[] args) {
-        for(String arg : args) {
+
+        for (String arg : args) {
             LOG.debug("Handling argument: {}", arg);
-            if(arg.startsWith("-p=")) {
+            if (arg.startsWith("-p=")) {
                 sortDir = arg.substring("-p=".length());
 
             } else if (arg.startsWith("-ft=")) {
@@ -74,7 +78,7 @@ public class Main {
             } else if (arg.startsWith("-a=")) {
                 try {
                     ageToSort = Integer.parseInt(arg.substring("-a=".length()));
-                    if(ageToSort < 0) {
+                    if (ageToSort < 0) {
                         ageToSort = 30;
                         throw new NumberFormatException();
                     }
@@ -82,6 +86,10 @@ public class Main {
                 } catch (NumberFormatException e) {
                     LOG.error("Invalid number. Must be a positive integer. Default value {} is used.", ageToSort);
                 }
+            } else if (arg.startsWith("-cf=")) {
+                configFile = arg.substring("-cf=".length());
+                LOG.info("Using config file: {}", configFile);
+
             } else {
                 LOG.warn("Unknown argument: {}", arg);
             }
@@ -92,8 +100,9 @@ public class Main {
      * Reads the sort-config.json file into a Map.
      */
     private static void createMapFromConfigFile() {
-        InputStream is = Main.class.getResourceAsStream("/sort-config.json");
-        assert is != null;
+
+        InputStream is = createReadConfigFile();
+
         BufferedReader reader = new BufferedReader(new InputStreamReader(is));
         Map<String, String> tempMap = GSON.fromJson(reader, Map.class);
 
@@ -101,9 +110,53 @@ public class Main {
     }
 
     /**
+     * Reads the config file. If the specified file doesn't exist, the default config file is used. If that doesn't exist
+     * either, it is created from the default config file in the resources.
+     *
+     * @return InputStream of the config file.
+     */
+    private static InputStream createReadConfigFile() {
+
+        Path configPath = Paths.get(configFile);
+        if (!Files.exists(configPath) && !configFile.equals(HOME_DIR + DEFAULT_CONFIG_FILE)) {
+            LOG.warn("Config file not found. Using default config file.");
+            configFile = DEFAULT_CONFIG_FILE;
+            configPath = Paths.get(HOME_DIR + configFile);
+        }
+        if (!Files.exists(configPath)) {
+            try {
+                LOG.debug("Default config file not found. Creating it.");
+                Files.createDirectories(configPath.getParent());
+                Files.copy(readResourceConfigFile(), configPath);
+            } catch (IOException e) {
+                // This shouldn't happen, but there are some edge cases where it could.
+                LOG.error("Couldn't create config file: ", e);
+                return readResourceConfigFile();
+            }
+        }
+        try {
+            return new FileInputStream(configPath.toFile());
+        } catch (FileNotFoundException e) {
+            // This should never happen
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Reads the default config file.
+     *
+     * @return InputStream of the default config file.
+     */
+    private static InputStream readResourceConfigFile() {
+
+        return Main.class.getResourceAsStream("/sort-config.json");
+    }
+
+    /**
      * Normalizes the paths in the fileTypeMap.
      */
     private static void normalizePaths() {
+
         fileTypeMap.entrySet().forEach(entry -> {
             if (entry.getValue().startsWith("~")) {
                 entry.setValue(HOME_DIR + entry.getValue().substring(1));
@@ -126,6 +179,7 @@ public class Main {
      * @throws IOException if dir doesn't exist.
      */
     private static Set<String> loadFilesFromDir(String dir) throws IOException {
+
         try (Stream<Path> stream = Files.list(Paths.get(HOME_DIR + dir))) {
             Set<String> files = stream.filter(file -> !Files.isDirectory(file)).map(Path::getFileName).map(Path::toString).collect(Collectors.toSet());
 
@@ -143,6 +197,7 @@ public class Main {
      * @return Set of filtered filenames.
      */
     private static Set<String> extractWantedFiles(Set<String> files) {
+
         Set<String> wantedFiles = files.stream().filter(Main::fileTypeWanted).filter(Main::fileOldEnough).collect(Collectors.toSet());
         LOG.info("Wanted files found: {}", wantedFiles.size());
         wantedFiles.forEach(Main::logFilename);
@@ -155,6 +210,7 @@ public class Main {
      * @return if the file ending is present in the fileTypeMap.
      */
     private static boolean fileTypeWanted(String fileName) {
+
         fileName = fileName.substring(fileName.lastIndexOf('.') + 1);
         return fileTypeMap.containsKey(fileName);
     }
@@ -165,11 +221,13 @@ public class Main {
      * @return if the file is older than 30 days.
      */
     private static boolean fileOldEnough(String fileName) {
+
         Instant lastModified = Instant.ofEpochMilli(new File(completeSortDir + File.separator + fileName).lastModified());
         return lastModified.atZone(ZoneId.systemDefault()).toLocalDateTime().plusDays(ageToSort).isBefore(LocalDateTime.now());
     }
 
     private static void logFilename(String fileName) {
+
         LOG.debug("- {}", fileName);
     }
 
@@ -177,10 +235,11 @@ public class Main {
      * Moves a single file into the directory that was specified for this file ending
      */
     private static void moveFile(String fileName) {
+
         File file = new File(completeSortDir + File.separator + fileName);
         String newDir = fileTypeMap.get(fileName.substring(fileName.lastIndexOf('.') + 1));
         File dir = new File(newDir);
-        if(!dir.exists()) {
+        if (!dir.exists()) {
             try {
                 dir.mkdirs();
             } catch (SecurityException e) {
@@ -189,7 +248,8 @@ public class Main {
         }
         String newFileName = newDir + File.separator + fileName;
         boolean move = file.renameTo(new File(newFileName));
-        if(move) movedFiles++;
+        if (move) movedFiles++;
         LOG.info("Moving file: {} to {}. {}", fileName, newFileName, (move ? "Success :)" : "Failure :("));
     }
+
 }
